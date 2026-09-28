@@ -511,6 +511,9 @@ pub fn assemble(mut isa: Option<InstructionSetKind>, code: &str) -> Result<Vec<u
                     Xor,
                     Or,
                     Mul,
+                    MulUpperSignedSigned,
+                    MulUpperUnsignedUnsigned,
+                    MulUpperSignedUnsigned,
                     DivUnsigned,
                     DivSigned,
                     RemUnsigned,
@@ -541,6 +544,12 @@ pub fn assemble(mut isa: Option<InstructionSetKind>, code: &str) -> Result<Vec<u
                     Some((index, 1, Op::Or))
                 } else if let Some(index) = rhs.find('^') {
                     Some((index, 1, Op::Xor))
+                } else if let Some(index) = rhs.find("mulhu") {
+                    Some((index, 5, Op::MulUpperUnsignedUnsigned))
+                } else if let Some(index) = rhs.find("mulhsu") {
+                    Some((index, 6, Op::MulUpperSignedUnsigned))
+                } else if let Some(index) = rhs.find("mulhs") {
+                    Some((index, 5, Op::MulUpperSignedSigned))
                 } else if let Some(index) = rhs.find('*') {
                     Some((index, 1, Op::Mul))
                 } else if let Some(index) = rhs.find("/u") {
@@ -600,6 +609,9 @@ pub fn assemble(mut isa: Option<InstructionSetKind>, code: &str) -> Result<Vec<u
                                             return Err(format!("cannot parse line {nth_line}: i32 not supported for operation"));
                                         }
                                         Op::Mul => Instruction::mul_32(dst, src1, src2),
+                                        Op::MulUpperSignedSigned => return Err(format!("cannot parse line {nth_line}: i32 not supported for operation")),
+                                        Op::MulUpperUnsignedUnsigned => return Err(format!("cannot parse line {nth_line}: i32 not supported for operation")),
+                                        Op::MulUpperSignedUnsigned => return Err(format!("cannot parse line {nth_line}: i32 not supported for operation")),
                                         Op::DivUnsigned => Instruction::div_unsigned_32(dst, src1, src2),
                                         Op::DivSigned => Instruction::div_signed_32(dst, src1, src2),
                                         Op::RemUnsigned => Instruction::rem_unsigned_32(dst, src1, src2),
@@ -637,6 +649,9 @@ pub fn assemble(mut isa: Option<InstructionSetKind>, code: &str) -> Result<Vec<u
                                         Op::Xor => Instruction::xor(dst, src1, src2),
                                         Op::Or => Instruction::or(dst, src1, src2),
                                         Op::Mul => Instruction::mul_64(dst, src1, src2),
+                                        Op::MulUpperSignedSigned => Instruction::mul_upper_signed_signed(dst, src1, src2),
+                                        Op::MulUpperUnsignedUnsigned => Instruction::mul_upper_unsigned_unsigned(dst, src1, src2),
+                                        Op::MulUpperSignedUnsigned => Instruction::mul_upper_signed_unsigned(dst, src1, src2),
                                         Op::DivUnsigned => Instruction::div_unsigned_64(dst, src1, src2),
                                         Op::DivSigned => Instruction::div_signed_64(dst, src1, src2),
                                         Op::RemUnsigned => Instruction::rem_unsigned_64(dst, src1, src2),
@@ -661,6 +676,7 @@ pub fn assemble(mut isa: Option<InstructionSetKind>, code: &str) -> Result<Vec<u
                             match op_marker {
                                 OpMarker::I32 => {
                                     emit_and_continue!(match op {
+                                        Op::MulUpperSignedSigned | Op::MulUpperUnsignedUnsigned | Op::MulUpperSignedUnsigned => return Err(format!("cannot parse line {nth_line}: operation not supported with an immediate")),
                                         Op::Add => Instruction::add_imm_32(dst, src1, src2),
                                         Op::Sub => Instruction::add_imm_32(dst, src1, -src2),
                                         Op::And => {
@@ -716,6 +732,7 @@ pub fn assemble(mut isa: Option<InstructionSetKind>, code: &str) -> Result<Vec<u
                                 }
                                 OpMarker::NONE => {
                                     emit_and_continue!(match op {
+                                        Op::MulUpperSignedSigned | Op::MulUpperUnsignedUnsigned | Op::MulUpperSignedUnsigned => return Err(format!("cannot parse line {nth_line}: operation not supported with an immediate")),
                                         Op::Add => Instruction::add_imm_64(dst, src1, src2),
                                         Op::Sub => Instruction::add_imm_64(dst, src1, -src2),
                                         Op::And => Instruction::and_imm(dst, src1, src2),
@@ -756,6 +773,7 @@ pub fn assemble(mut isa: Option<InstructionSetKind>, code: &str) -> Result<Vec<u
                             match op_marker {
                                 OpMarker::I32 => {
                                     emit_and_continue!(match op {
+                                        Op::MulUpperUnsignedUnsigned | Op::MulUpperSignedUnsigned => return Err(format!("cannot parse line {nth_line}: operation not supported with an immediate")),
                                         Op::Add => Instruction::add_imm_32(dst, src2, src1),
                                         Op::Sub => Instruction::negate_and_add_imm_32(dst, src2, src1),
                                         Op::And => {
@@ -768,6 +786,7 @@ pub fn assemble(mut isa: Option<InstructionSetKind>, code: &str) -> Result<Vec<u
                                             return Err(format!("cannot parse line {nth_line}: i32 not supported for operation"));
                                         }
                                         Op::Mul => Instruction::mul_imm_32(dst, src2, src1),
+                                        Op::MulUpperSignedSigned => return Err(format!("cannot parse line {nth_line}: i32 not supported for operation")),
                                         Op::DivUnsigned | Op::DivSigned => {
                                             return Err(format!(
                                                 "cannot parse line {nth_line}: i32 and division is not supported for immediates"
@@ -813,12 +832,14 @@ pub fn assemble(mut isa: Option<InstructionSetKind>, code: &str) -> Result<Vec<u
                                 }
                                 OpMarker::NONE => {
                                     emit_and_continue!(match op {
+                                        Op::MulUpperUnsignedUnsigned | Op::MulUpperSignedUnsigned => return Err(format!("cannot parse line {nth_line}: operation not supported with an immediate")),
                                         Op::Add => Instruction::add_imm_64(dst, src2, src1),
                                         Op::Sub => Instruction::negate_and_add_imm_64(dst, src2, src1),
                                         Op::And => Instruction::and_imm(dst, src2, src1),
                                         Op::Xor => Instruction::xor_imm(dst, src2, src1),
                                         Op::Or => Instruction::or_imm(dst, src2, src1),
                                         Op::Mul => Instruction::mul_imm_64(dst, src2, src1),
+                                        Op::MulUpperSignedSigned => return Err(format!("cannot parse line {nth_line}: immediate not supported for operation")),
                                         Op::DivUnsigned | Op::DivSigned => {
                                             return Err(format!("cannot parse line {nth_line}: division is not supported for immediates"));
                                         }
