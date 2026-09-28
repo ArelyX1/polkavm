@@ -16,10 +16,7 @@ members = [
     "tools/spectool",
     "tools/gastool",
 
-    "examples/doom",
-    "examples/quake",
     "examples/hello-world",
-    "benches",
 ]
 
 [workspace.package]

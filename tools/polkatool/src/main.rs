@@ -94,6 +94,10 @@ enum Args {
         #[clap(long)]
         dispatch_table: Option<String>,
 
+        /// The target instruction set.
+        #[clap(short = 'i', long, value_enum, default_value_t = Isa::Latest32)]
+        instruction_set: Isa,
+
         /// The input file.
         input: PathBuf,
     },
@@ -173,6 +177,7 @@ fn main() {
             run_only_if_newer,
             min_stack_size,
             dispatch_table,
+            instruction_set,
         } => main_link(
             input,
             output,
@@ -182,6 +187,7 @@ fn main() {
             run_only_if_newer,
             min_stack_size,
             dispatch_table,
+            instruction_set,
         ),
         Args::Disassemble {
             output,
@@ -235,6 +241,7 @@ fn main_link(
     run_only_if_newer: bool,
     min_stack_size: Option<u32>,
     dispatch_table: Option<String>,
+    instruction_set: Isa,
 ) -> Result<(), String> {
     if run_only_if_newer {
         if let Ok(output_mtime) = std::fs::metadata(&output).and_then(|m| m.modified()) {
@@ -275,7 +282,12 @@ fn main_link(
         }
     };
 
-    let blob = match polkavm_linker::program_from_elf(config, TargetInstructionSet::Latest, &data) {
+    let target_isa = match instruction_set.convert() {
+        polkavm_common::program::InstructionSetKind::ReviveV1 => TargetInstructionSet::ReviveV1,
+        polkavm_common::program::InstructionSetKind::JamV1 => TargetInstructionSet::JamV1,
+        polkavm_common::program::InstructionSetKind::Latest32 | polkavm_common::program::InstructionSetKind::Latest64 => TargetInstructionSet::Latest,
+    };
+    let blob = match polkavm_linker::program_from_elf(config, target_isa, &data) {
         Ok(blob) => blob,
         Err(error) => {
             bail!("failed to link {input:?}: {error}");
